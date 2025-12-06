@@ -2,10 +2,9 @@
 import { ref, onMounted } from 'vue'
 import axios from 'axios'
 
-// 本機 Proxy API
 const API_URL = "/api"
 
-// 禮金列表
+// 禮金列表（每筆仍維持陣列格式： [name, amount, side, note, date, rowIndex] ）
 const gifts = ref([])
 
 // 新增禮金表單
@@ -16,7 +15,7 @@ const toast = ref({ show: false, message: '', type: 'success' })
 
 // 編輯狀態
 const editingId = ref(null)
-const editingGift = ref({})
+const editingGift = ref([])
 
 // 加載狀態
 const isSubmitting = ref(false)
@@ -35,47 +34,64 @@ const showToast = (message, type = 'success') => {
 const fetchGifts = async () => {
   try {
     const res = await axios.get(API_URL)
-    // 過濾掉標題列（第一列）
-    // 標準化每列，確保每列為 [name, amount, side, note, date]
-    gifts.value = res.data.slice(1).map(row => [
-      row[0] ?? '',
-      row[1] ?? 0,
-      row[2] ?? '男方',
-      row[3] ?? '',
-      row[4] ?? ''
-    ])
+    const body = res.data
+
+    if (!Array.isArray(body)) {
+      gifts.value = []
+      return
+    }
+
+    // ✅ 只處理你現在的物件格式 + 最新在最上面
+    const sorted = [...body].sort((a, b) => {
+      const tA = a.date ? new Date(a.date).getTime() : 0
+      const tB = b.date ? new Date(b.date).getTime() : 0
+      return tB - tA
+    })
+
+    gifts.value = sorted.map(item => ([
+      item.name ?? '',
+      Number(item.amount ?? 0),
+      item.side ?? '男方',
+      item.note ?? '',
+      item.date ?? '',
+      item.rowIndex ?? 0
+    ]))
+
   } catch (err) {
-    console.error(err)
+    console.error('fetchGifts error', err)
     showToast('取得資料失敗', 'error')
   }
 }
 
+
 // 新增一筆禮金
 const submitGift = async () => {
-  if (!newGift.value.name || newGift.value.amount <= 0) {
+  if (!newGift.value.name || Number(newGift.value.amount) <= 0) {
     showToast('請填寫完整資訊', 'error')
     return
   }
 
   isSubmitting.value = true
   try {
-    await axios.post(API_URL, newGift.value)
+    // 明確使用 JSON header，避免 Apps Script 解析成表單格式錯誤
+    await axios.post(API_URL, newGift.value, {
+      headers: { 'Content-Type': 'application/json' }
+    })
     showToast('已新增禮金！', 'success')
     newGift.value = { name: '', amount: 0, side: '男方', note: '' }
     await fetchGifts()
   } catch (err) {
-    console.error(err)
+    console.error('submitGift error', err)
     showToast('新增失敗，請稍後重試', 'error')
   } finally {
     isSubmitting.value = false
   }
 }
 
-// 開始編輯
+// 開始編輯（複製陣列）
 const startEdit = (index) => {
   editingId.value = index
-  // 使用陣列複製保持欄位位置一致
-  editingGift.value = [...gifts.value[index]]
+  editingGift.value = [...gifts.value[index]] // 保持陣列格式
 }
 
 // 取消編輯
@@ -86,27 +102,29 @@ const cancelEdit = () => {
 
 // 保存編輯
 const saveEdit = async (index) => {
-  if (!editingGift.value[0] || editingGift.value[1] <= 0) {
+  // editingGift: [name, amount, side, note, date, rowIndex]
+  if (!editingGift.value[0] || Number(editingGift.value[1]) <= 0) {
     showToast('請填寫完整資訊', 'error')
     return
   }
 
+  const rowIndex = Number(editingGift.value[5] || gifts.value[index]?.[5] || (index + 2))
   isEditing.value[index] = true
   try {
-    // 使用 POST 搭配 action=update（避免伺服器不接受 PUT/DELETE）
     await axios.post(API_URL, {
       action: 'update',
-      rowIndex: index + 1,
+      rowIndex,
       name: editingGift.value[0],
-      amount: editingGift.value[1],
+      amount: Number(editingGift.value[1]),
       side: editingGift.value[2],
       note: editingGift.value[3]
-    })
+    }, { headers: { 'Content-Type': 'application/json' } })
+
     showToast('已更新禮金！', 'success')
     editingId.value = null
     await fetchGifts()
   } catch (err) {
-    console.error(err)
+    console.error('saveEdit error', err)
     showToast('更新失敗，請稍後重試', 'error')
   } finally {
     isEditing.value[index] = false
@@ -117,17 +135,17 @@ const saveEdit = async (index) => {
 const deleteGift = async (index) => {
   if (!confirm('確定要刪除此筆禮金嗎？')) return
 
+  const rowIndex = Number(gifts.value[index]?.[5] || (index + 2))
   isDeleting.value[index] = true
   try {
-    // 使用 POST 搭配 action=delete（避免伺服器不接受 PUT/DELETE）
     await axios.post(API_URL, {
       action: 'delete',
-      rowIndex: index + 1
-    })
+      rowIndex
+    }, { headers: { 'Content-Type': 'application/json' } })
     showToast('已刪除禮金', 'success')
     await fetchGifts()
   } catch (err) {
-    console.error(err)
+    console.error('deleteGift error', err)
     showToast('刪除失敗，請稍後重試', 'error')
   } finally {
     isDeleting.value[index] = false
@@ -139,9 +157,9 @@ const addAmount = (value) => {
   newGift.value.amount = Number(newGift.value.amount) + value
 }
 
-// 初始抓取資料
 onMounted(fetchGifts)
 </script>
+
 
 <template>
   <div class="min-h-screen bg-gradient-to-br from-pink-50 to-red-50">
@@ -197,19 +215,19 @@ onMounted(fetchGifts)
               <div class="flex gap-2 mt-3">
                 <button 
                   @click="addAmount(100)"
-                  class="flex-1 bg-pink-100 text-pink-600 font-semibold px-3 py-2 rounded-lg hover:bg-pink-200 transition"
+                  class="flex-1 bg-white-100 text-black-600 font-semibold px-3 py-2 rounded-lg hover:bg-pink-200 transition"
                 >
                   +100
                 </button>
                 <button 
                   @click="addAmount(500)"
-                  class="flex-1 bg-pink-100 text-pink-600 font-semibold px-3 py-2 rounded-lg hover:bg-pink-200 transition"
+                  class="flex-1 bg-white-100 text-black-600 font-semibold px-3 py-2 rounded-lg hover:bg-pink-200 transition"
                 >
                   +500
                 </button>
                 <button 
                   @click="addAmount(1000)"
-                  class="flex-1 bg-pink-100 text-pink-600 font-semibold px-3 py-2 rounded-lg hover:bg-pink-200 transition"
+                  class="flex-1 bg-white-100 text-black-600 font-semibold px-3 py-2 rounded-lg hover:bg-pink-200 transition"
                 >
                   +1000
                 </button>
