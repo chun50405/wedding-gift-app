@@ -5,8 +5,8 @@ import dayjs from 'dayjs'
 import utc from 'dayjs/plugin/utc'
 import timezone from 'dayjs/plugin/timezone'
 
-const API_URL = import.meta.env.VITE_API_URL
-console.log(API_URL)
+const API_URL = "/api"
+
 // 禮金列表（每筆仍維持陣列格式： [name, amount, side, note, date, rowIndex] ）
 const gifts = ref([])
 
