@@ -187,7 +187,7 @@ const addAmount = (value) => {
 }
 
 onMounted(fetchGifts)
-</
+</script>
 
 
 <template>
