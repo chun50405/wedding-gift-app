@@ -1,3 +1,4 @@
+
 <script setup>
 import { ref, onMounted } from 'vue'
 import axios from 'axios'
@@ -5,9 +6,15 @@ import dayjs from 'dayjs'
 import utc from 'dayjs/plugin/utc'
 import timezone from 'dayjs/plugin/timezone'
 
+// 啟用 dayjs 外掛（若你要顯示台北時區可再打開 setDefault）
+dayjs.extend(utc)
+dayjs.extend(timezone)
+// dayjs.tz.setDefault('Asia/Taipei')
+
 const API_URL = import.meta.env.VITE_API_URL
-console.log(API_URL)
-// 禮金列表（每筆仍維持陣列格式： [name, amount, side, note, date, rowIndex] ）
+console.log('[API_URL]', API_URL)
+
+// 禮金列表（每筆維持陣列格式： [name, amount, side, note, date, rowIndex] ）
 const gifts = ref([])
 
 // 新增禮金表單
@@ -32,16 +39,9 @@ const showToast = (msg, type = 'success') => {
     type === 'success' ? '✅ ' :
     type === 'error'   ? '❌ ' :
     type === 'warning' ? '⚠️ ' : ''
-
-  toast.message = icon + msg
-  toast.type = type
-  toast.show = true
-
-  setTimeout(() => {
-    toast.show = false
-  }, 2000)
+  toast.value = { show: true, message: icon + msg, type }
+  setTimeout(() => { toast.value.show = false }, 2000)
 }
-
 
 // 取得 Google Sheet 資料
 const fetchGifts = async () => {
@@ -55,7 +55,7 @@ const fetchGifts = async () => {
       return
     }
 
-    // ✅ 只處理你現在的物件格式 + 最新在最上面
+    // 最新在最上面
     const sorted = [...body].sort((a, b) => {
       const tA = a.date ? new Date(a.date).getTime() : 0
       const tB = b.date ? new Date(b.date).getTime() : 0
@@ -79,8 +79,7 @@ const fetchGifts = async () => {
   }
 }
 
-
-// 新增一筆禮金
+// 新增一筆禮金（Simple Request：避免預檢/OPTIONS）
 const submitGift = async () => {
   if (!newGift.value.name || Number(newGift.value.amount) <= 0) {
     showToast('請填寫完整資訊', 'error')
@@ -89,10 +88,17 @@ const submitGift = async () => {
 
   isSubmitting.value = true
   try {
-    // 明確使用 JSON header，避免 Apps Script 解析成表單格式錯誤
-    await axios.post(API_URL, newGift.value, {
-      headers: { 'Content-Type': 'application/json' }
+    const params = new URLSearchParams()
+    params.append('action', 'create')
+    params.append('name', newGift.value.name)
+    params.append('amount', String(newGift.value.amount))
+    params.append('side', newGift.value.side)
+    params.append('note', newGift.value.note || '')
+
+    await axios.post(API_URL, params, {
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
     })
+
     showToast('已新增禮金！', 'success')
     newGift.value = { name: '', amount: 0, side: '男方', note: '' }
     await fetchGifts()
@@ -110,13 +116,13 @@ const startEdit = (index) => {
   editingGift.value = [...gifts.value[index]] // 保持陣列格式
 }
 
-// 取消編輯
+// 取消編輯（⚠️ 請用空陣列，不要用 {}）
 const cancelEdit = () => {
   editingId.value = null
-  editingGift.value = {}
+  editingGift.value = []
 }
 
-// 保存編輯
+// 保存編輯（Simple Request）
 const saveEdit = async (index) => {
   // editingGift: [name, amount, side, note, date, rowIndex]
   if (!editingGift.value[0] || Number(editingGift.value[1]) <= 0) {
@@ -127,14 +133,17 @@ const saveEdit = async (index) => {
   const rowIndex = Number(editingGift.value[5] || gifts.value[index]?.[5] || (index + 2))
   isEditing.value[index] = true
   try {
-    await axios.post(API_URL, {
-      action: 'update',
-      rowIndex,
-      name: editingGift.value[0],
-      amount: Number(editingGift.value[1]),
-      side: editingGift.value[2],
-      note: editingGift.value[3]
-    }, { headers: { 'Content-Type': 'application/json' } })
+    const params = new URLSearchParams()
+    params.append('action', 'update')
+    params.append('rowIndex', String(rowIndex))
+    params.append('name', editingGift.value[0])
+    params.append('amount', String(editingGift.value[1]))
+    params.append('side', editingGift.value[2])
+    params.append('note', editingGift.value[3] || '')
+
+    await axios.post(API_URL, params, {
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+    })
 
     showToast('已更新禮金！', 'success')
     editingId.value = null
@@ -147,17 +156,21 @@ const saveEdit = async (index) => {
   }
 }
 
-// 刪除禮金
+// 刪除禮金（Simple Request）
 const deleteGift = async (index) => {
   if (!confirm('確定要刪除此筆禮金嗎？')) return
 
   const rowIndex = Number(gifts.value[index]?.[5] || (index + 2))
   isDeleting.value[index] = true
   try {
-    await axios.post(API_URL, {
-      action: 'delete',
-      rowIndex
-    }, { headers: { 'Content-Type': 'application/json' } })
+    const params = new URLSearchParams()
+    params.append('action', 'delete')
+    params.append('rowIndex', String(rowIndex))
+
+    await axios.post(API_URL, params, {
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+    })
+
     showToast('已刪除禮金', 'success')
     await fetchGifts()
   } catch (err) {
@@ -174,7 +187,7 @@ const addAmount = (value) => {
 }
 
 onMounted(fetchGifts)
-</script>
+</
 
 
 <template>
