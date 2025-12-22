@@ -79,7 +79,7 @@ const fetchGifts = async () => {
   }
 }
 
-// 新增一筆禮金（Simple Request：避免預檢/OPTIONS）
+// 新增一筆禮金（改用 GET）
 const submitGift = async () => {
   if (!newGift.value.name || Number(newGift.value.amount) <= 0) {
     showToast('請填寫完整資訊', 'error')
@@ -88,15 +88,14 @@ const submitGift = async () => {
 
   isSubmitting.value = true
   try {
-    const params = new URLSearchParams()
-    params.append('action', 'create')
-    params.append('name', newGift.value.name)
-    params.append('amount', String(newGift.value.amount))
-    params.append('side', newGift.value.side)
-    params.append('note', newGift.value.note || '')
-
-    await axios.post(API_URL, params, {
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+    await axios.get(API_URL, {
+      params: {
+        action: 'create',
+        name: newGift.value.name,
+        amount: String(newGift.value.amount),
+        side: newGift.value.side,
+        note: newGift.value.note || ''
+      }
     })
 
     showToast('已新增禮金！', 'success')
@@ -110,6 +109,7 @@ const submitGift = async () => {
   }
 }
 
+
 // 開始編輯（複製陣列）
 const startEdit = (index) => {
   editingId.value = index
@@ -122,9 +122,8 @@ const cancelEdit = () => {
   editingGift.value = []
 }
 
-// 保存編輯（Simple Request）
+// 保存編輯（改用 GET）
 const saveEdit = async (index) => {
-  // editingGift: [name, amount, side, note, date, rowIndex]
   if (!editingGift.value[0] || Number(editingGift.value[1]) <= 0) {
     showToast('請填寫完整資訊', 'error')
     return
@@ -133,16 +132,15 @@ const saveEdit = async (index) => {
   const rowIndex = Number(editingGift.value[5] || gifts.value[index]?.[5] || (index + 2))
   isEditing.value[index] = true
   try {
-    const params = new URLSearchParams()
-    params.append('action', 'update')
-    params.append('rowIndex', String(rowIndex))
-    params.append('name', editingGift.value[0])
-    params.append('amount', String(editingGift.value[1]))
-    params.append('side', editingGift.value[2])
-    params.append('note', editingGift.value[3] || '')
-
-    await axios.post(API_URL, params, {
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+    await axios.get(API_URL, {
+      params: {
+        action: 'update',
+        rowIndex,
+        name: editingGift.value[0],
+        amount: String(editingGift.value[1]),
+        side: editingGift.value[2],
+        note: editingGift.value[3] || ''
+      }
     })
 
     showToast('已更新禮金！', 'success')
@@ -156,19 +154,18 @@ const saveEdit = async (index) => {
   }
 }
 
-// 刪除禮金（Simple Request）
+// 刪除禮金（改用 GET）
 const deleteGift = async (index) => {
   if (!confirm('確定要刪除此筆禮金嗎？')) return
 
   const rowIndex = Number(gifts.value[index]?.[5] || (index + 2))
   isDeleting.value[index] = true
   try {
-    const params = new URLSearchParams()
-    params.append('action', 'delete')
-    params.append('rowIndex', String(rowIndex))
-
-    await axios.post(API_URL, params, {
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+    await axios.get(API_URL, {
+      params: {
+        action: 'delete',
+        rowIndex
+      }
     })
 
     showToast('已刪除禮金', 'success')
@@ -180,6 +177,7 @@ const deleteGift = async (index) => {
     isDeleting.value[index] = false
   }
 }
+
 
 // 快速加額按鈕
 const addAmount = (value) => {
